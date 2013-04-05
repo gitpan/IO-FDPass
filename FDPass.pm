@@ -21,7 +21,7 @@ systems) or any (streaming) socket (on WIN32 systems).
 package IO::FDPass;
 
 BEGIN {
-   $VERSION = '0.1';
+   $VERSION = 0.2;
 
    require XSLoader;
    XSLoader::load (__PACKAGE__, $VERSION);
@@ -77,12 +77,12 @@ although ActivePerl 32 bit needed a newer MinGW version (that supports XP
 and higher).
 
 However, windows doesn't support asynchronous file descriptor passing, so
-C<send> and C<recv> will have to "rendezvous", that is, they have to wait
-for each other. Therefore, on windows, it's advisable to run them at the
-same time to avoid any unnecessary delays.
+the source process must still be around when the destination process wants
+to receive the file handle. Also, if the target process fails to fetch the
+handle, the handle will leak, so never do that.
 
-Also, on windows, the passing process must give the receiving process the
-PROCESS_DUP_HANDLE access right for this module to work.
+Also, on windows, the receiving process must have the PROCESS_DUP_HANDLE
+access right on the sender process for this module to work.
 
 Cygwin is not supported at the moment, as file descriptor passing in
 cygwin is not supported, and cannot be rolled on your own as cygwin has no

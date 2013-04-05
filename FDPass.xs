@@ -19,7 +19,6 @@
   #include <io.h>
   #include <sys/cygwin.h>
 
-  #define ioctlsocket(a,b,c) ioctl (a, b, c)
   #define _open_osfhandle(h,m) cygwin_attach_handle_to_fd ("/dev/tcp", -1, (HANDLE)h, 1, GENERIC_READ | GENERIC_WRITE)
   typedef int SOCKET;
 
@@ -57,25 +56,27 @@ rw (int wr, int fd, char *buf, int len)
   while (got != len)
     {
       int sze = wr
-              ? send ((SOCKET)fd, buf, len, 0)  /* we assume send and recv are macros with arguments */
-              : recv ((SOCKET)fd, buf, len, 0); /* to be on the safe side */
+              ? send ((SOCKET)fd, buf, len - got, 0)  /* we assume send and recv are macros with arguments */
+              : recv ((SOCKET)fd, buf, len - got, 0); /* to be on the safe side */
 
-      if (sze <= 0)
+      if (sze < 0)
         {
           if (errno == EAGAIN || errno == WSAEWOULDBLOCK)
             {
-              ioctlsocket (fd, FIONBIO, &nbio);
+              ioctl (fd, FIONBIO, (void *)&nbio);
               nbio = 1;
             }
           else
             break;
         }
+      else if (sze == 0)
+        break;
       else
         got += sze;
     }
 
   if (nbio)
-    ioctlsocket (fd, FIONBIO, &nbio);
+    ioctl (fd, FIONBIO, (void *)&nbio);
 
   return got == len;
 }
@@ -86,23 +87,22 @@ fd_send (int socket, int fd)
 {
 #if defined(WIN32)
   DWORD pid;
-  HANDLE target, h;
+  HANDLE hdl;
+  
+  pid = GetCurrentProcessId ();
 
-  /* seriously, there is no way to query whether a socket is non-blocking?? */
-  if (!rw (0, socket, (char *)&pid, sizeof (pid)))
+  if (!rw (1, socket, (char *)&pid, sizeof (pid)))
     return 0;
 
-  target = OpenProcess (PROCESS_DUP_HANDLE, FALSE, pid);
-  if (!target)
-    croak ("AnyEvent::ProcessPool::fd_recv: OpenProcess failed");
-
-  if (!DuplicateHandle ((HANDLE)-1, (HANDLE)_get_osfhandle (fd), target, &h, 0, FALSE, DUPLICATE_SAME_ACCESS))
-    croak ("AnyEvent::ProcessPool::fd_recv: DuplicateHandle failed");
-
-  CloseHandle (target);
-
-  if (!rw (1, socket, (char *)&h  , sizeof (h  )))
+  errno = EBADF;
+  if (!DuplicateHandle ((HANDLE)-1, (HANDLE)_get_osfhandle (fd), (HANDLE)-1, &hdl, 0, FALSE, DUPLICATE_SAME_ACCESS))
     return 0;
+
+  if (!rw (1, socket, (char *)&hdl, sizeof (hdl)))
+    {
+      CloseHandle (hdl);
+      return 0;
+    }
 
   return 1;
 
@@ -146,16 +146,30 @@ static int
 fd_recv (int socket)
 {
 #if defined(WIN32)
-  DWORD pid = GetCurrentProcessId ();
-  HANDLE h;
+  DWORD pid;
+  HANDLE source, rhd, lhd;
 
-  if (!rw (1, socket, (char *)&pid, sizeof (pid)))
+  if (!rw (0, socket, (char *)&pid, sizeof (pid)))
     return -1;
 
-  if (!rw (0, socket, (char *)&h  , sizeof (h  )))
+  if (!rw (0, socket, (char *)&rhd, sizeof (rhd)))
     return -1;
 
-  return _open_osfhandle ((intptr_t)h, 0);
+  source = OpenProcess (PROCESS_DUP_HANDLE, FALSE, pid);
+  errno = EACCES;
+  if (!source)
+    return -1;
+
+  pid = DuplicateHandle (source, rhd, (HANDLE)-1, &lhd,
+                         0, FALSE, DUPLICATE_SAME_ACCESS | DUPLICATE_CLOSE_SOURCE);
+
+  CloseHandle (source);
+
+  errno = EBADF;
+  if (!pid)
+    return -1;
+
+  return _open_osfhandle ((intptr_t)lhd, 0);
 #else
   void *buf = malloc (CMSG_SPACE (sizeof (int)));
 

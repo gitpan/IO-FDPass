@@ -1,5 +1,10 @@
 Revision history for Perl extension IO::FDPass
 
+0.2  Fri Apr  5 10:20:05 CEST 2013
+	- fix a problem when sending on non-blocking sockets on windows.
+        - "improve" fd passing to be less blocking on windows, at the cost
+          of leaking the handle on error.
+
 0.1  Fri Apr  5 07:04:02 CEST 2013
 	- first release.
 
