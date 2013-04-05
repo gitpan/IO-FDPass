@@ -1,0 +1,8 @@
+Revision history for Perl extension IO::FDPass
+
+0.1  Fri Apr  5 07:04:02 CEST 2013
+	- first release.
+
+0.0  Fri Apr  5 06:09:40 CEST 2013
+	- ripped out of AnyEvent::Fork > 0.01.
+
