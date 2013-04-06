@@ -6,11 +6,19 @@ IO::FDPass - pass a file descriptor over a socket
 
    use IO::FDPass;
 
+   IO::FDPass::send fileno $socket, fileno $fh_to_pass
+      or die "send failed: $!";
+
+   my $fd = IO::FDPass::recv fileno $socket;
+   $fd >= 0 or die "recv failed: $!";
+
 =head1 DESCRIPTION
 
 This small low-level module only has one purpose: pass a file descriptor
 to another process, using a (streaming) unix domain socket (on POSIX
-systems) or any (streaming) socket (on WIN32 systems).
+systems) or any (streaming) socket (on WIN32 systems). The ability to pass
+file descriptors on windows is currently the unique selling point of this
+module. Have I mentioned that it is really small, too?
 
 =head1 FUNCTIONS
 
@@ -21,7 +29,7 @@ systems) or any (streaming) socket (on WIN32 systems).
 package IO::FDPass;
 
 BEGIN {
-   $VERSION = 0.2;
+   $VERSION = '1.0';
 
    require XSLoader;
    XSLoader::load (__PACKAGE__, $VERSION);
@@ -49,16 +57,16 @@ Example: pass a file handle over an open socket.
 Receive a file descriptor from the socket and return it if successful. On
 errors, return C<-1>.
 
-Note that I<both> C<$socket_fd> amd the returned file descriptor are, in
+Note that I<both> C<$socket_fd> and the returned file descriptor are, in
 fact, file descriptors, not handles.
 
-When used on non-blocking sockets, this function might fail with C<$!>
-set to C<EAGAIN> or equivalent, in which case you are free to try. It
+When used on non-blocking sockets, this function might fail with C<$!> set
+to C<EAGAIN> or equivalent, in which case you are free to try again. It
 should succeed if called on a socket that indicates readability (e.g. via
 C<select>).
 
-Example: receive a file desriptor from a blockign socket and convetr it to
-a file handle.
+Example: receive a file descriptor from a blocking socket and convert it
+to a file handle.
 
   my $fd = IO::FDPass::recv fileno $socket;
   $fd >= 0 or die "unable to receive file handle: $!";
@@ -79,7 +87,8 @@ and higher).
 However, windows doesn't support asynchronous file descriptor passing, so
 the source process must still be around when the destination process wants
 to receive the file handle. Also, if the target process fails to fetch the
-handle, the handle will leak, so never do that.
+handle for any reason (crashes, fails to call C<recv> etc.), the handle
+will leak, so never do that.
 
 Also, on windows, the receiving process must have the PROCESS_DUP_HANDLE
 access right on the sender process for this module to work.
@@ -92,17 +101,22 @@ one isn't exposed to programs, and only used for stdin/out/err. Sigh.
 =head1 OTHER MODULES
 
 At the time of this writing, the author of this module was aware of two
-other file descriptor passing modules on CPAN: L<Linux::FDPasser> and
+other file descriptor passing modules on CPAN: L<File::FDPasser> and
 L<AnyEvent::FDPasser>.
 
 The former hasn't seen any release for over a decade, isn't 64 bit clean
-and it's author didn't respond to my mail with the fix. It does, however,
-support a snumber of pre-standard unices.
+and it's author didn't respond to my mail with the fix, so doesn't work on
+many 64 bit machines. It does, however, support a number of pre-standard
+unices, basically everything of relevance at the time it was written.
 
 The latter seems to have similar support for antique unices, and doesn't
-seem to suffer from 64 bit bugs, but inexplicably has a large perl part,
-and requires AnyEvent. Presumably that makes it much more user friendly
-than this module.
+seem to suffer from 64 bit bugs, but inexplicably has a large perl
+part, doesn't support mixing data and file descriptors, and requires
+AnyEvent. Presumably that makes it much more user friendly than this
+module (skimming the manpage shows that a lot of thought has gone into
+it, and you are well advised to read it and maybe use it before trying a
+low-level module such as this one). In fact, the manpage discusses even
+more file descriptor passing modules on CPAN.
 
 Neither seems to support native win32 perls.
 

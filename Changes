@@ -1,5 +1,10 @@
 Revision history for Perl extension IO::FDPass
 
+1.0  Sun Apr  7 00:42:13 CEST 2013
+	- this release only updates the documentation.
+	- better SYNOPSIS.
+        - discuss other file descriptor passing modules more thoroughly.
+
 0.2  Fri Apr  5 10:20:05 CEST 2013
 	- fix a problem when sending on non-blocking sockets on windows.
         - "improve" fd passing to be less blocking on windows, at the cost
